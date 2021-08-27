@@ -18,9 +18,10 @@ static inline int kallsyms_for_perf(void)
 }
 
 /*
- * We show kallsyms information even to normal users if we've enabled
- * kernel profiling and are explicitly not paranoid (so kptr_restrict
- * is clear, and sysctl_perf_event_paranoid isn't set).
+ * We show kallsyms information and display them sorted by address even
+ * to normal users if we've enabled kernel profiling and are explicitly
+ * not paranoid (so kptr_restrict is clear, and sysctl_perf_event_paranoid
+ * isn't set).
  *
  * Otherwise, require CAP_SYSLOG (assuming kptr_restrict isn't set to
  * block even that).
