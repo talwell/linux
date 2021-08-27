@@ -56,10 +56,16 @@ static void free_sect_attrs(struct module_sect_attrs *sect_attrs)
 {
 	const struct bin_attribute *const *bin_attr;
 
+<<<<<<< HEAD
 	for (bin_attr = sect_attrs->grp.bin_attrs; *bin_attr; bin_attr++)
 		kfree((*bin_attr)->attr.name);
 	kfree(sect_attrs->grp.bin_attrs);
 	kfree(sect_attrs);
+=======
+	for (section = 0; section < sect_attrs->nsections; section++)
+		kfree(sect_attrs->attrs[section].battr.attr.name);
+	kvfree(sect_attrs);
+>>>>>>> 4f5a077d3c83 (module: add arch-indep FG-KASLR for randomizing function layout)
 }
 
 static int add_sect_attrs(struct module *mod, const struct load_info *info)
@@ -74,7 +80,14 @@ static int add_sect_attrs(struct module *mod, const struct load_info *info)
 	for (i = 0; i < info->hdr->e_shnum; i++)
 		if (!sect_empty(&info->sechdrs[i]))
 			nloaded++;
+<<<<<<< HEAD
 	sect_attrs = kzalloc(struct_size(sect_attrs, attrs, nloaded), GFP_KERNEL);
+=======
+	size[0] = ALIGN(struct_size(sect_attrs, attrs, nloaded),
+			sizeof(sect_attrs->grp.bin_attrs[0]));
+	size[1] = (nloaded + 1) * sizeof(sect_attrs->grp.bin_attrs[0]);
+	sect_attrs = kvzalloc(size[0] + size[1], GFP_KERNEL);
+>>>>>>> 4f5a077d3c83 (module: add arch-indep FG-KASLR for randomizing function layout)
 	if (!sect_attrs)
 		return -ENOMEM;
 
