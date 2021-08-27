@@ -160,9 +160,11 @@ SECTIONS
 
 	} :text = 0xcccccccc
 
+	TEXT_FG_KASLR
+
 	/* End of text section, which should occupy whole number of pages */
-	_etext = .;
 	. = ALIGN(PAGE_SIZE);
+	_etext = .;
 
 	X86_ALIGN_RODATA_BEGIN
 	RO_DATA(PAGE_SIZE)
