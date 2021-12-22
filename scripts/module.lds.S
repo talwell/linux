@@ -10,6 +10,7 @@
 #endif
 
 #include <asm-generic/codetag.lds.h>
+#include <asm-generic/vmlinux.lds.h>
 
 SECTIONS {
 	/DISCARD/ : {
@@ -60,6 +61,14 @@ SECTIONS {
 	}
 #endif
 	MOD_SEPARATE_CODETAG_SECTIONS()
+
+#ifdef CONFIG_MODULE_FG_KASLR
+	.text : {
+		*(TEXT_MAIN_MODULE)
+	}
+
+	TEXT_FG_KASLR
+#endif
 }
 
 /* bring in arch-specific sections */
