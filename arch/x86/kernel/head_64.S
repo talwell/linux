@@ -485,7 +485,7 @@ SYM_DATA(trampoline_lock, .quad 0);
 	__FINITDATA
 
 	__INIT
-SYM_CODE_START(early_idt_handler_array)
+SYM_CODE_START_SECT(early_idt_handler_array, early_idt_handler)
 	i = 0
 	.rept NUM_EXCEPTION_VECTORS
 	.if ((EXCEPTION_ERRCODE_MASK >> i) & 1) == 0
@@ -505,7 +505,7 @@ SYM_CODE_START(early_idt_handler_array)
 SYM_CODE_END(early_idt_handler_array)
 	ANNOTATE_NOENDBR // early_idt_handler_array[NUM_EXCEPTION_VECTORS]
 
-SYM_CODE_START_LOCAL(early_idt_handler_common)
+SYM_CODE_START_LOCAL_SECT(early_idt_handler_common, early_idt_handler)
 	UNWIND_HINT_IRET_REGS offset=16
 	/*
 	 * The stack is the hardware frame, an error code or zero, and the

@@ -296,7 +296,7 @@ SYM_FUNC_END(startup_32_smp)
 #include "verify_cpu.S"
 
 __INIT
-SYM_FUNC_START(early_idt_handler_array)
+SYM_FUNC_START_SECT(early_idt_handler_array, early_idt_handler)
 	# 36(%esp) %eflags
 	# 32(%esp) %cs
 	# 28(%esp) %eip
@@ -313,7 +313,7 @@ SYM_FUNC_START(early_idt_handler_array)
 	.endr
 SYM_FUNC_END(early_idt_handler_array)
 	
-SYM_CODE_START_LOCAL(early_idt_handler_common)
+SYM_CODE_START_LOCAL_SECT(early_idt_handler_common, early_idt_handler)
 	/*
 	 * The stack is the hardware frame, an error code or zero, and the
 	 * vector number.

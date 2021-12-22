@@ -56,7 +56,7 @@ __PV_CALLEE_SAVE_REGS_THUNK(__pv_queued_spin_unlock_slowpath, ".spinlock.text");
 	FRAME_END
 
 DEFINE_ASM_FUNC(__raw_callee_save___pv_queued_spin_unlock,
-		PV_UNLOCK_ASM, .spinlock.text);
+		PV_UNLOCK_ASM, .spinlock.text.__raw_callee_save___pv_queued_spin_unlock);
 
 #else /* CONFIG_64BIT */
 

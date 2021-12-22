@@ -152,8 +152,8 @@ SECTIONS
 		KPROBES_TEXT
 		SOFTIRQENTRY_TEXT
 #ifdef CONFIG_MITIGATION_RETPOLINE
-		*(.text..__x86.indirect_thunk)
-		*(.text..__x86.return_thunk)
+		*(SECT_WILDCARD(.text..__x86.indirect_thunk))
+		*(SECT_WILDCARD(.text..__x86.return_thunk))
 #endif
 		STATIC_CALL_TEXT
 		*(.gnu.warning)
