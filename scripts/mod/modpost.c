@@ -823,7 +823,7 @@ enum mismatch {
 struct sectioncheck {
 	const char *fromsec[20];
 	const char *bad_tosec[20];
-	const char *good_tosec[20];
+	const char *good_tosec[25];
 	enum mismatch mismatch;
 };
 
