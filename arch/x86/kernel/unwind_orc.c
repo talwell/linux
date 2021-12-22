@@ -75,11 +75,6 @@ static void unwind_dump(struct unwind_state *state)
 	}
 }
 
-static inline unsigned long orc_ip(const int *ip)
-{
-	return (unsigned long)ip + *ip;
-}
-
 static struct orc_entry *__orc_find(int *ip_table, struct orc_entry *u_table,
 				    unsigned int num_entries, unsigned long ip)
 {
@@ -242,6 +237,7 @@ static struct orc_entry *orc_find(unsigned long ip)
 }
 
 #ifdef CONFIG_MODULES
+<<<<<<< HEAD
 
 static DEFINE_MUTEX(sort_mutex);
 static int *cur_orc_ip_table = __start_orc_unwind_ip;
@@ -286,6 +282,8 @@ static int orc_sort_cmp(const void *_a, const void *_b)
 	return orc_a->type == ORC_TYPE_UNDEFINED ? -1 : 1;
 }
 
+=======
+>>>>>>> 085383405ac9 (x86: decouple ORC table sorting into a separate file)
 void unwind_module_init(struct module *mod, void *_orc_ip, size_t orc_ip_size,
 			void *_orc, size_t orc_size)
 {
@@ -297,16 +295,7 @@ void unwind_module_init(struct module *mod, void *_orc_ip, size_t orc_ip_size,
 		     orc_size % sizeof(*orc) != 0 ||
 		     num_entries != orc_size / sizeof(*orc));
 
-	/*
-	 * The 'cur_orc_*' globals allow the orc_sort_swap() callback to
-	 * associate an .orc_unwind_ip table entry with its corresponding
-	 * .orc_unwind entry so they can both be swapped.
-	 */
-	mutex_lock(&sort_mutex);
-	cur_orc_ip_table = orc_ip;
-	cur_orc_table = orc;
-	sort(orc_ip, num_entries, sizeof(int), orc_sort_cmp, orc_sort_swap);
-	mutex_unlock(&sort_mutex);
+	orc_sort(orc_ip, orc, num_entries);
 
 	mod->arch.orc_unwind_ip = orc_ip;
 	mod->arch.orc_unwind = orc;

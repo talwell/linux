@@ -73,6 +73,13 @@ struct orc_entry {
 #endif
 } __packed;
 
+static inline unsigned long orc_ip(const int *ip)
+{
+	return (unsigned long)ip + *ip;
+}
+
+void orc_sort(int *ip_table, struct orc_entry *orc_table, u32 num_orcs);
+
 #endif /* __ASSEMBLER__ */
 
 #endif /* _ORC_TYPES_H */
