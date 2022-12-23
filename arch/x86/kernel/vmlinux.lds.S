@@ -69,6 +69,15 @@ const_cpu_current_top_of_stack = cpu_current_top_of_stack;
 #define ALIGN_ENTRY_TEXT_END	. = ALIGN(PMD_SIZE);
 
 /*
+ * The worst case for realigning entry text is PMD_SIZE (2 Mb). PMD_SIZE +
+ * default reservation (+ one TEXT_PAD) on top would turn into 4 Mb, as rodata
+ * is also aligned to 2 Mb, don't waste that much.
+ */
+#undef ARCH_FG_KASLR_RESERVE
+#define ARCH_FG_KASLR_RESERVE	(PMD_SIZE - FG_KASLR_RESERVE -	\
+				 CONFIG_FUNCTION_ALIGNMENT)
+
+/*
  * This section contains data which will be mapped as decrypted. Memory
  * encryption operates on a page basis. Make this section PMD-aligned
  * to avoid splitting the pages while mapping the section early.
@@ -89,7 +98,7 @@ const_cpu_current_top_of_stack = cpu_current_top_of_stack;
 
 #else
 
-#define X86_ALIGN_RODATA_BEGIN
+#define X86_ALIGN_RODATA_BEGIN	. = ALIGN(PAGE_SIZE);
 #define X86_ALIGN_RODATA_END					\
 		. = ALIGN(PAGE_SIZE);				\
 		__end_rodata_aligned = .;
@@ -146,25 +155,27 @@ SECTIONS
 #endif
 		ALIGN_ENTRY_TEXT_END
 
+		TEXT_PAD
 		TEXT_TEXT
 		SCHED_TEXT
 		LOCK_TEXT
 		KPROBES_TEXT
 		SOFTIRQENTRY_TEXT
 #ifdef CONFIG_MITIGATION_RETPOLINE
-		*(SECT_WILDCARD(.text..__x86.indirect_thunk))
-		*(SECT_WILDCARD(.text..__x86.return_thunk))
+		*(.text..__x86.indirect_thunk)
+		*(.text..__x86.return_thunk)
 #endif
 		STATIC_CALL_TEXT
 		*(.gnu.warning)
 
 	} :text = 0xcccccccc
 
-	TEXT_FG_KASLR
+	FG_KASLR_TEXT
 
 	/* End of text section, which should occupy whole number of pages */
-	. = ALIGN(PAGE_SIZE);
 	_etext = .;
+	TEXT_PAD
+	. = ALIGN(PAGE_SIZE);
 
 	X86_ALIGN_RODATA_BEGIN
 	RO_DATA(PAGE_SIZE)
@@ -290,6 +301,8 @@ SECTIONS
 		__cfi_sites_end = .;
 	}
 #endif
+
+	ENTRY_SITES
 
 	/*
 	 * struct alt_inst entries. From the header (alternative.h):

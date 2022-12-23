@@ -165,8 +165,8 @@ SYM_INNER_LABEL(entry_SYSRETQ_unsafe_stack, SYM_L_GLOBAL)
 	CLEAR_CPU_BUFFERS
 	sysretq
 SYM_INNER_LABEL(entry_SYSRETQ_end, SYM_L_GLOBAL)
-	ANNOTATE_NOENDBR
-	int3
+//	ANNOTATE_NOENDBR
+//	int3
 SYM_CODE_END(entry_SYSCALL_64)
 
 /*
@@ -225,15 +225,7 @@ SYM_FUNC_END(__switch_to_asm)
  * r12: kernel thread arg
  */
 .pushsection .text, "ax"
-SYM_CODE_START(ret_from_fork_asm)
-	/*
-	 * This is the start of the kernel stack; even through there's a
-	 * register set at the top, the regset isn't necessarily coherent
-	 * (consider kthreads) and one cannot unwind further.
-	 *
-	 * This ensures stack unwinds of kernel threads terminate in a known
-	 * good state.
-	 */
+SYM_CODE_START_NOALIGN(ret_from_fork_asm)
 	UNWIND_HINT_END_OF_STACK
 	ANNOTATE_NOENDBR // copy_thread
 	CALL_DEPTH_ACCOUNT
@@ -788,7 +780,9 @@ EXPORT_SYMBOL(asm_load_gs_index)
  *
  * C calling convention: exc_xen_hypervisor_callback(struct *pt_regs)
  */
+SYM_PUSH_SECTION(exc_xen_hypervisor_callback)
 	__FUNC_ALIGN
+SYM_POP_SECTION()
 SYM_CODE_START_LOCAL_NOALIGN(exc_xen_hypervisor_callback)
 
 /*
@@ -817,7 +811,9 @@ SYM_CODE_END(exc_xen_hypervisor_callback)
  * We distinguish between categories by comparing each saved segment register
  * with its current contents: any discrepancy means we in category 1.
  */
+SYM_PUSH_SECTION(xen_failsafe_callback)
 	__FUNC_ALIGN
+SYM_POP_SECTION()
 SYM_CODE_START_NOALIGN(xen_failsafe_callback)
 	UNWIND_HINT_UNDEFINED
 	ENDBR
@@ -1480,7 +1476,9 @@ SYM_CODE_START(entry_SYSCALL32_ignore)
 SYM_CODE_END(entry_SYSCALL32_ignore)
 
 .pushsection .text, "ax"
+SYM_PUSH_SECTION(rewind_stack_and_make_dead)
 	__FUNC_ALIGN
+SYM_POP_SECTION()
 SYM_CODE_START_NOALIGN(rewind_stack_and_make_dead)
 	UNWIND_HINT_FUNC
 	/* Prevent any naive code from trying to unwind to our caller. */

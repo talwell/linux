@@ -139,6 +139,7 @@ SYM_CODE_START_NOALIGN(startup_64)
 	ANNOTATE_RETPOLINE_SAFE
 	jmp	*.Lcommon_startup_64(%rip)
 SYM_CODE_END(startup_64)
+	__FINIT
 
 	__INITRODATA
 SYM_DATA_LOCAL(.Lcommon_startup_64, .quad common_startup_64)
@@ -503,7 +504,9 @@ SYM_CODE_START_SECT(early_idt_handler_array, early_idt_handler)
 	.fill early_idt_handler_array + i*EARLY_IDT_HANDLER_SIZE - ., 1, 0xcc
 	.endr
 SYM_CODE_END(early_idt_handler_array)
+SYM_PUSH_SECTION(early_idt_handler)
 	ANNOTATE_NOENDBR // early_idt_handler_array[NUM_EXCEPTION_VECTORS]
+SYM_POP_SECTION()
 
 SYM_CODE_START_LOCAL_SECT(early_idt_handler_common, early_idt_handler)
 	UNWIND_HINT_IRET_REGS offset=16
@@ -718,4 +721,3 @@ SYM_DATA_START_PAGE_ALIGNED(empty_zero_page)
 	.skip PAGE_SIZE
 SYM_DATA_END(empty_zero_page)
 EXPORT_SYMBOL(empty_zero_page)
-

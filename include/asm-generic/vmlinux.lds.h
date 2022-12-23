@@ -83,11 +83,82 @@
 #define RO_EXCEPTION_TABLE
 #endif
 
+/* This is useful for collecting individual sections back into one main */
+#define SECT_WILDCARD(sect)	sect sect.[0-9a-zA-Z_]*
+
 /* Align . function alignment. */
 #define ALIGN_FUNCTION()  . = ALIGN(CONFIG_FUNCTION_ALIGNMENT)
 
-/* This is useful for collecting individual sections back into one main */
-#define SECT_WILDCARD(sect)	sect sect.[0-9a-zA-Z_]*
+#define BOUNDED_SECTION_PRE_LABEL(_sec_, _label_, _s_, _e_)		\
+	_s_##_label_ = .;						\
+	KEEP(*(_sec_))							\
+	_e_##_label_ = .;
+
+#define BOUNDED_SECTION_POST_LABEL(_sec_, _label_, _s_, _e_)		\
+	_label_##_s_ = .;						\
+	KEEP(*(_sec_))							\
+	_label_##_e_ = .;
+
+#define BOUNDED_SECTION_BY(_sec_, _label_)				\
+	BOUNDED_SECTION_PRE_LABEL(_sec_, _label_, __start, __stop)
+
+/*
+ * LTO_CLANG, LD_DEAD_CODE_DATA_ELIMINATION and FG_KASLR options enable
+ * `-ffunction-sections`, which produces separate .text.* sections. In case
+ * of CONFIG_FG_KASLR_SECT, they need to stay distict so their order can
+ * be randomized. Without CONFIG_FG_KASLR_SECT, the separate .text sections
+ * must be collected back into the common section.
+ */
+#ifdef CONFIG_FG_KASLR_SECT
+#define TEXT_MAIN
+#define MAIN_TEXT
+#elif defined(CONFIG_FG_KASLR_OBJTOOL) || defined(CONFIG_LTO_CLANG) ||	\
+      defined(CONFIG_LD_DEAD_CODE_DATA_ELIMINATION)
+#define TEXT_MAIN		SECT_WILDCARD(.text)
+#else
+#define TEXT_MAIN		.text
+#endif
+
+#ifdef CONFIG_FG_KASLR
+/*
+ * Relocations don't provide any details about the symbol they refer to. Due to
+ * the nature of start/stop symbols (size == 0), _etext can then be confused
+ * with __start_rodata, _stext with the first function and so on. The only way
+ * to avoid that is to insert a small padding after such symbols when needed.
+ */
+#define TEXT_PAD		. += CONFIG_FUNCTION_ALIGNMENT;
+/*
+ * Reserve some arbitrary space to cover sections with bigger alignment. Needed
+ * for objtool variant only, as the section one adds precise reservation within
+ * the script. Must be a "universal" worst case value.
+ */
+#define FG_KASLR_RESERVE	(32 * 1024)
+#else
+#define TEXT_PAD
+#define FG_KASLR_RESERVE	0
+#endif
+
+/* Arch may add more space if needed (e.g. x86_64 requires additional 2 Mb) */
+#ifndef ARCH_FG_KASLR_RESERVE
+#define ARCH_FG_KASLR_RESERVE	0
+#endif
+
+#ifdef CONFIG_FG_KASLR_SECT
+/* Used by `scripts/generate_text_sections.pl` to inject text sections */
+#define FG_KASLR_TEXT		__fg_kaslr_magic = .;			\
+				. += ARCH_FG_KASLR_RESERVE;
+#elif defined(CONFIG_FG_KASLR_OBJTOOL)
+#define FG_KASLR_TEXT		. += FG_KASLR_RESERVE;			\
+				. += ARCH_FG_KASLR_RESERVE;
+#else
+#define FG_KASLR_TEXT
+#endif
+
+#ifdef CONFIG_MODULE_FG_KASLR
+#define MODULE_FG_KASLR_TEXT	__fg_kaslr_magic = .;
+#else
+#define MODULE_FG_KASLR_TEXT
+#endif
 
 /*
  * LD_DEAD_CODE_DATA_ELIMINATION option enables -fdata-sections, which
@@ -118,41 +189,6 @@ defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)
 #define BSS_MAIN .bss
 #define SBSS_MAIN .sbss
 #endif
-
-/*
- * LTO_CLANG, LD_DEAD_CODE_DATA_ELIMINATION and FG_KASLR options enable
- * -ffunction-sections, which produces separately named .text sections. In
- * the case of CONFIG_FG_KASLR, they need to stay distict so they can be
- * separately randomized. Without CONFIG_FG_KASLR, the separate .text
- * sections can be collected back into a common section, which makes the
- * resulting image slightly smaller
- */
-#if (defined(CONFIG_LD_DEAD_CODE_DATA_ELIMINATION) || defined(CONFIG_LTO_CLANG) || \
-defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)) && !defined(CONFIG_FG_KASLR)
-#define TEXT_MAIN		SECT_WILDCARD(.text)
-#elif defined(CONFIG_FG_KASLR)
-#define TEXT_MAIN		.text.__unused__
-#else
-#define TEXT_MAIN		.text
-#endif
-
-/*
- * Same for modules. However, LD_DEAD_CODE_DATA_ELIMINATION doesn't touch
- * them, so no need to check for it here.
- */
-#if defined(CONFIG_LTO_CLANG) && !defined(CONFIG_MODULE_FG_KASLR)
-#define TEXT_MAIN_MODULE	SECT_WILDCARD(.text)
-#elif defined(CONFIG_MODULE_FG_KASLR)
-#define TEXT_MAIN_MODULE	.text.__unused__
-#else
-#define TEXT_MAIN_MODULE	.text
-#endif
-
-/*
- * Used by scripts/generate_text_sections.pl to inject text sections,
- * harmless if FG-KASLR is disabled.
- */
-#define TEXT_FG_KASLR		__fg_kaslr_magic = .;
 
 /*
  * GCC 4.5 and later have a 32 bytes section alignment for structures.
@@ -581,19 +617,6 @@ defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)) && !defined(CO
 	. = ALIGN((align));						\
 	__end_rodata = .;
 
-
-/*
- * Non-instrumentable text section
- */
-#define NOINSTR_TEXT							\
-		ALIGN_FUNCTION();					\
-		__noinstr_text_start = .;				\
-		*(SECT_WILDCARD(.noinstr.text))				\
-		__cpuidle_text_start = .;				\
-		*(.cpuidle.text)					\
-		__cpuidle_text_end = .;					\
-		__noinstr_text_end = .;
-
 #define TEXT_SPLIT							\
 		__split_text_start = .;					\
 		*(.text.split .text.split.[0-9a-zA-Z_]*)		\
@@ -613,25 +636,45 @@ defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)) && !defined(CO
  * .text section. Map to function alignment to avoid address changes
  * during second ld run in second ld pass when generating System.map
  *
- * TEXT_MAIN here will match symbols with a fixed pattern (for example,
- * .text.hot or .text.unlikely) if dead code elimination or
- * function-section is enabled. Match these symbols first before
- * TEXT_MAIN to ensure they are grouped together.
- *
- * Also placing .text.hot section at the beginning of a page, this
- * would help the TLB performance.
+ * TEXT_MAIN here will match .text.fixup and .text.unlikely if dead
+ * code elimination is enabled, so these sections should be converted
+ * to use ".." first.
  */
-#define TEXT_TEXT							\
+#ifndef MAIN_TEXT
+#define MAIN_TEXT							\
 		ALIGN_FUNCTION();					\
-		*(.text.asan.* .text.tsan.*)				\
-		*(.text.unknown .text.unknown.*)			\
-		TEXT_SPLIT						\
-		TEXT_UNLIKELY						\
-		. = ALIGN(PAGE_SIZE);					\
-		TEXT_HOT						\
+		*(.text.hot .text.hot.*)				\
 		*(TEXT_MAIN .text.fixup)				\
+		*(.text.unlikely .text.unlikely.*)			\
+		*(.text.unknown .text.unknown.*)
+#endif
+
+/*
+ * Non-instrumentable text section
+ */
+#define NOINSTR_TEXT							\
+		ALIGN_FUNCTION();					\
+		__noinstr_text_start = .;				\
+		*(SECT_WILDCARD(.noinstr.text))				\
+		__cpuidle_text_start = .;				\
+		*(.cpuidle.text)					\
+		__cpuidle_text_end = .;					\
+		__noinstr_text_end = .;
+
+#define REF_TEXT							\
+		ALIGN_FUNCTION();					\
+		__ref_text_start = .;					\
+		*(.text..refcount)					\
+		*(.ref.text)						\
+		*(.text.asan.* .text.tsan.*)				\
+	MEM_KEEP(init.text*)						\
+	MEM_KEEP(exit.text*)						\
+		__ref_text_end = .;
+
+#define TEXT_TEXT							\
+		MAIN_TEXT						\
 		NOINSTR_TEXT						\
-		*(.ref.text)
+		REF_TEXT
 
 /* sched.text is aling to function alignment to secure we have same
  * address even at second ld pass when generating System.map */
@@ -646,7 +689,7 @@ defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)) && !defined(CO
 #define LOCK_TEXT							\
 		ALIGN_FUNCTION();					\
 		__lock_text_start = .;					\
-		*(.spinlock.text)					\
+		*(SECT_WILDCARD(.spinlock.text))			\
 		__lock_text_end = .;
 
 #define KPROBES_TEXT							\
@@ -711,6 +754,22 @@ defined(CONFIG_AUTOFDO_CLANG) || defined(CONFIG_PROPELLER_CLANG)) && !defined(CO
 	}
 #else
 #define BTF
+#endif
+
+#ifdef CONFIG_FG_KASLR_OBJTOOL
+#define ENTRY_SITES							\
+	. = ALIGN(8);							\
+	.entry_sites : AT(ADDR(.entry_sites) - LOAD_OFFSET) {		\
+		BOUNDED_SECTION_BY(.entry_sites, _entry_sites)		\
+	}								\
+									\
+	. = ALIGN(8);							\
+	.entry_site_aux : AT(ADDR(.entry_site_aux) - LOAD_OFFSET) {	\
+		BOUNDED_SECTION_BY(.entry_site_aux, _entry_site_aux)	\
+	}								\
+
+#else
+#define ENTRY_SITES
 #endif
 
 /*

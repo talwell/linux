@@ -13,6 +13,7 @@
 #include <linux/string.h>
 
 #define TASK_SIZE_MAX DEFAULT_TASK_SIZE
+#include <asm/extable.h>
 #include <asm/pgtable.h>
 #include <asm-generic/access_ok.h>
 

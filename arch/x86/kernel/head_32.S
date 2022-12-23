@@ -64,7 +64,7 @@ RESERVE_BRK(pagetables, INIT_MAP_SIZE)
 	__INIT
 SYM_CODE_START(startup_32)
 	movl pa(initial_stack),%ecx
-	
+
 /*
  * Set segments to known values.
  */
@@ -127,6 +127,7 @@ SYM_CODE_START(startup_32)
 
 	jmp .Ldefault_entry
 SYM_CODE_END(startup_32)
+__FINIT
 
 /*
  * Non-boot CPU entry point; entered from trampoline.S
@@ -312,7 +313,7 @@ SYM_FUNC_START_SECT(early_idt_handler_array, early_idt_handler)
 	.fill early_idt_handler_array + i*EARLY_IDT_HANDLER_SIZE - ., 1, 0xcc
 	.endr
 SYM_FUNC_END(early_idt_handler_array)
-	
+
 SYM_CODE_START_LOCAL_SECT(early_idt_handler_common, early_idt_handler)
 	/*
 	 * The stack is the hardware frame, an error code or zero, and the

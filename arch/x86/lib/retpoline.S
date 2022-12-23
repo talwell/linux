@@ -306,10 +306,13 @@ __EXPORT_THUNK(srso_alias_untrain_ret)
  * 3) STIBP must be enabled, or SMT disabled, to prevent the sibling thread
  *    from re-poisioning the BTB prediction.
  */
+SYM_PUSH_SECTION(retbleed_untrain_ret)
 	.align 64
 	.skip 64 - (retbleed_return_thunk - retbleed_untrain_ret), 0xcc
+SYM_POP_SECTION()
 SYM_CODE_START_LOCAL_NOALIGN(retbleed_untrain_ret)
 	ANNOTATE_NOENDBR
+
 	/*
 	 * As executed from retbleed_untrain_ret, this is:
 	 *
@@ -342,7 +345,7 @@ SYM_CODE_START_LOCAL_NOALIGN(retbleed_untrain_ret)
 SYM_INNER_LABEL(retbleed_return_thunk, SYM_L_GLOBAL)
 	ret
 	int3
-SYM_CODE_END(retbleed_return_thunk)
+SYM_LABEL_END(__x86_return_thunk)
 
 	/*
 	 * Ensure the TEST decoding / BTB invalidation is complete.

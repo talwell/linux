@@ -192,6 +192,9 @@ objtool-args-$(CONFIG_HAVE_UACCESS_VALIDATION)		+= --uaccess
 objtool-args-$(or $(CONFIG_GCOV_KERNEL),$(CONFIG_KCOV))	+= --no-unreachable
 objtool-args-$(CONFIG_PREFIX_SYMBOLS)			+= --prefix=$(CONFIG_FUNCTION_PADDING_BYTES)
 objtool-args-$(CONFIG_OBJTOOL_WERROR)			+= --Werror
+ifneq ($(part-of-module),y)
+objtool-args-$(CONFIG_FG_KASLR_OBJTOOL)			+= --entry
+endif
 
 objtool-args = $(objtool-args-y)					\
 	$(if $(delay-objtool), --link)					\

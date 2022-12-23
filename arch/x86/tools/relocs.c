@@ -17,7 +17,7 @@ static unsigned int		shstrndx;
 static unsigned int		shsymtabndx;
 static unsigned int		shxsymtabndx;
 
-static int sym_index(Elf_Sym *sym);
+static int sym_index(const Elf_Sym *sym);
 
 struct relocs {
 				uint32_t	*offset;
@@ -49,8 +49,6 @@ struct section {
 				char           *strtab;
 };
 static struct section		*secs;
-
-static int fgkaslr_mode;
 
 static const char * const	sym_regex_kernel[S_NSYMTYPES] = {
 /*
@@ -276,7 +274,7 @@ static const char *sec_name(unsigned shndx)
 	return name;
 }
 
-static const char *sym_name(const char *sym_strtab, Elf_Sym *sym)
+static const char *sym_name(const char *sym_strtab, const Elf_Sym *sym)
 {
 	const char *name;
 	name = "<noname>";
@@ -328,10 +326,10 @@ static uint64_t elf64_to_cpu(uint64_t val)
 # define elf_xword_to_cpu(x)	elf32_to_cpu(x)
 #endif
 
-static int sym_index(Elf_Sym *sym)
+static int sym_index(const Elf_Sym *sym)
 {
-	Elf_Sym *symtab = secs[shsymtabndx].symtab;
-	Elf32_Word *xsymtab = secs[shxsymtabndx].xsymtab;
+	const Elf32_Word *xsymtab = secs[shxsymtabndx].xsymtab;
+	const Elf_Sym *symtab = secs[shsymtabndx].symtab;
 	unsigned long offset;
 	int index;
 
@@ -695,8 +693,9 @@ static void add_reloc(struct relocs *r, uint32_t offset)
 	r->offset[r->count++] = offset;
 }
 
-static void walk_relocs(int (*process)(struct section *sec, Elf_Rel *rel,
-			Elf_Sym *sym, const char *symname))
+static void walk_relocs(int (*process)(const struct section *sec,
+				       const Elf_Rel *rel, const Elf_Sym *sym,
+				       const char *symname))
 {
 	int i;
 
@@ -737,29 +736,105 @@ static void walk_relocs(int (*process)(struct section *sec, Elf_Rel *rel,
 	}
 }
 
+<<<<<<< HEAD
 #if ELF_BITS == 64
 
 static int is_function_section(struct section *sec)
-{
-	if (!fgkaslr_mode)
-		return 0;
+=======
+/*
+ * The .data..percpu section is a special case for x86_64 SMP kernels.
+ * It is used to initialize the actual per_cpu areas and to provide
+ * definitions for the per_cpu variables that correspond to their offsets
+ * within the percpu area. Since the values of all of the symbols need
+ * to be offsets from the start of the per_cpu area the virtual address
+ * (sh_addr) of .data..percpu is 0 in SMP kernels.
+ *
+ * This means that:
+ *
+ *	Relocations that reference symbols in the per_cpu area do not
+ *	need further relocation (since the value is an offset relative
+ *	to the start of the per_cpu area that does not change).
+ *
+ *	Relocations that apply to the per_cpu area need to have their
+ *	offset adjusted by by the value of __per_cpu_load to make them
+ *	point to the correct place in the loaded image (because the
+ *	virtual address of .data..percpu is 0).
+ *
+ * For non SMP kernels .data..percpu is linked as part of the normal
+ * kernel data and does not require special treatment.
+ *
+ */
+static int per_cpu_shndx	= -1;
+static Elf_Addr per_cpu_load_addr;
 
-	return !strncmp(sec_name(sec->shdr.sh_info), ".text.", 6);
+static void percpu_init(void)
+{
+	int i;
+	for (i = 0; i < shnum; i++) {
+		const ElfW(Sym) *sym;
+		if (strcmp(sec_name(i), ".data..percpu"))
+			continue;
+
+		if (secs[i].shdr.sh_addr != 0)	/* non SMP kernel */
+			return;
+
+		sym = sym_lookup("__per_cpu_load");
+		if (!sym)
+			die("can't find __per_cpu_load\n");
+
+		per_cpu_shndx = i;
+		per_cpu_load_addr = sym->st_value;
+		return;
+	}
 }
 
-static int is_randomized_sym(ElfW(Sym) *sym)
+static int add_text_pcrel;
+
+#if ELF_BITS == 64
+
+/*
+ * Check to see if a symbol lies in the .data..percpu section.
+ *
+ * The linker incorrectly associates some symbols with the
+ * .data..percpu section so we also need to check the symbol
+ * name to make sure that we classify the symbol correctly.
+ *
+ * The GNU linker incorrectly associates:
+ *	__init_begin
+ *	__per_cpu_load
+ *
+ * The "gold" linker incorrectly associates:
+ *	init_per_cpu__fixed_percpu_data
+ *	init_per_cpu__gdt_page
+ */
+static int is_percpu_sym(const ElfW(Sym) *sym, const char *symname)
 {
-	if (!fgkaslr_mode)
-		return 0;
+	int shndx = sym_index(sym);
 
-	if (sym->st_shndx > shnum)
-		return 0;
-
-	return !strncmp(sec_name(sym_index(sym)), ".text.", 6);
+	return (shndx == per_cpu_shndx) &&
+		strcmp(symname, "__init_begin") &&
+		strcmp(symname, "__per_cpu_load") &&
+		strncmp(symname, "init_per_cpu_", 13);
 }
 
-static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
-		      const char *symname)
+static int is_text_section_idx(unsigned int shndx)
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
+{
+	return !strncmp(sec_name(shndx), ".text", 5);
+}
+
+static int is_text_section(const struct section *sec)
+{
+	return is_text_section_idx(sec->shdr.sh_info);
+}
+
+static int is_text_sym(const ElfW(Sym) *sym)
+{
+	return is_text_section_idx(sym_index(sym));
+}
+
+static int do_reloc64(const struct section *sec, const Elf_Rel *rel,
+		      const ElfW(Sym) *sym, const char *symname)
 {
 	unsigned r_type = ELF64_R_TYPE(rel->r_info);
 	ElfW(Addr) offset = rel->r_offset;
@@ -777,6 +852,7 @@ static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 	case R_X86_64_PLT32:
 	case R_X86_64_REX_GOTPCRELX:
 		/*
+<<<<<<< HEAD
 		 * we need to keep pc relative relocations for sections which
 		 * might be randomized.
 		 * We also need to keep relocations for any offset which might
@@ -785,6 +861,17 @@ static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 		 * NB: R_X86_64_PLT32 can be treated as R_X86_64_PC32.
 		 */
 		if (is_function_section(sec) || is_randomized_sym(sym))
+=======
+		 * PC relative relocations don't need to be adjusted unless¬
+		 * referencing a percpu symbol or a symbol (both from and to
+		 * it) from a text section if `--text-pcrel` is set.
+		 *
+		 * NB: R_X86_64_PLT32 can be treated as R_X86_64_PC32.
+		 */
+		if ((add_text_pcrel &&
+		     (is_text_section(sec) || is_text_sym(sym))) ||
+		    is_percpu_sym(sym, symname))
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 			add_reloc(&relocs32neg, offset);
 		break;
 
@@ -834,8 +921,8 @@ static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 
 #else
 
-static int do_reloc32(struct section *sec, Elf_Rel *rel, Elf_Sym *sym,
-		      const char *symname)
+static int do_reloc32(const struct section *sec, const Elf_Rel *rel,
+		      const Elf_Sym *sym, const char *symname)
 {
 	unsigned r_type = ELF32_R_TYPE(rel->r_info);
 	int shn_abs = (sym->st_shndx == SHN_ABS) && !is_reloc(S_REL, symname);
@@ -877,7 +964,12 @@ static int do_reloc32(struct section *sec, Elf_Rel *rel, Elf_Sym *sym,
 	return 0;
 }
 
+<<<<<<< HEAD
 static int do_reloc_real(struct section *sec, Elf_Rel *rel, Elf_Sym *sym, const char *symname)
+=======
+static int do_reloc_real(const struct section *sec, const Elf_Rel *rel,
+			 const Elf_Sym *sym, const char *symname)
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 {
 	unsigned r_type = ELF32_R_TYPE(rel->r_info);
 	int shn_abs = (sym->st_shndx == SHN_ABS) && !is_reloc(S_REL, symname);
@@ -976,28 +1068,34 @@ static int write32_as_text(uint32_t v, FILE *f)
 	return fprintf(f, "\t.long 0x%08"PRIx32"\n", v) > 0 ? 0 : -1;
 }
 
-static void emit_relocs(int as_text, int use_real_mode)
+static void emit_relocs(const struct process_params *params)
 {
 	int i;
 	int (*write_reloc)(uint32_t, FILE *) = write32;
+<<<<<<< HEAD
 	int (*do_reloc)(struct section *sec, Elf_Rel *rel, Elf_Sym *sym, const char *symname);
+=======
+	int (*do_reloc)(const struct section *sec, const Elf_Rel *rel,
+			const Elf_Sym *sym, const char *symname);
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 
 #if ELF_BITS == 64
-	if (!use_real_mode)
+	if (!params->use_real_mode)
 		do_reloc = do_reloc64;
 	else
 		die("--realmode not valid for a 64-bit ELF file");
 #else
-	if (!use_real_mode)
+	if (!params->use_real_mode)
 		do_reloc = do_reloc32;
 	else
 		do_reloc = do_reloc_real;
 #endif
+	add_text_pcrel = params->text_pcrel;
 
 	/* Collect up the relocations */
 	walk_relocs(do_reloc);
 
-	if (relocs16.count && !use_real_mode)
+	if (relocs16.count && !params->use_real_mode)
 		die("Segment relocations found but --realmode not specified\n");
 
 	/* Order the relocations for more efficient processing */
@@ -1009,7 +1107,7 @@ static void emit_relocs(int as_text, int use_real_mode)
 #endif
 
 	/* Print the relocations */
-	if (as_text) {
+	if (params->as_text) {
 		/* Print the relocations in a form suitable that
 		 * gas will like.
 		 */
@@ -1018,7 +1116,7 @@ static void emit_relocs(int as_text, int use_real_mode)
 		write_reloc = write32_as_text;
 	}
 
-	if (use_real_mode) {
+	if (params->use_real_mode) {
 		write_reloc(relocs16.count, stdout);
 		for (i = 0; i < relocs16.count; i++)
 			write_reloc(relocs16.offset[i], stdout);
@@ -1051,8 +1149,8 @@ static void emit_relocs(int as_text, int use_real_mode)
  * Since different linkers tend to emit the sections in
  * different orders we use the section names in the output.
  */
-static int do_reloc_info(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
-				const char *symname)
+static int do_reloc_info(const struct section *sec, const Elf_Rel *rel,
+			 const ElfW(Sym) *sym, const char *symname)
 {
 	printf("%s\t%s\t%s\t%s\n",
 		sec_name(sec->shdr.sh_info),
@@ -1075,10 +1173,9 @@ static void print_reloc_info(void)
 # define process process_32
 #endif
 
-void process(FILE *fp, int use_real_mode, int as_text,
-	     int show_absolute_syms, int show_absolute_relocs,
-	     int show_reloc_info, int fgkaslr)
+void process(const struct process_params *params)
 {
+<<<<<<< HEAD
 	fgkaslr_mode = fgkaslr;
 	regex_init(use_real_mode);
 	read_ehdr(fp);
@@ -1103,4 +1200,27 @@ void process(FILE *fp, int use_real_mode, int as_text,
 	}
 
 	emit_relocs(as_text, use_real_mode);
+=======
+	regex_init(params->use_real_mode);
+	read_ehdr(params->fp);
+	read_shdrs(params->fp);
+	read_strtabs(params->fp);
+	read_symtabs(params->fp);
+	read_relocs(params->fp);
+	if (ELF_BITS == 64)
+		percpu_init();
+	if (params->show_absolute_syms) {
+		print_absolute_symbols();
+		return;
+	}
+	if (params->show_absolute_relocs) {
+		print_absolute_relocs();
+		return;
+	}
+	if (params->show_reloc_info) {
+		print_reloc_info();
+		return;
+	}
+	emit_relocs(params);
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 }

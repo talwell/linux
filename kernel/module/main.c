@@ -66,6 +66,9 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#undef MODULE_PARAM_PREFIX
+#define MODULE_PARAM_PREFIX "module."
+
 /*
  * Mutex protects:
  * 1) List of modules (also safely readable within RCU read section),
@@ -1726,20 +1729,24 @@ static void __layout_sections(struct module *mod, struct load_info *info, bool i
  * Store sections in an array and then shuffle the sections
  * to reorder the functions.
  */
-static void randomize_text(struct module *mod, struct load_info *info)
+static bool module_randomize_text(struct module *mod,
+				  const struct load_info *info)
 {
-	int shnum = info->hdr->e_shnum;
-	int num_text_sections = 0;
-	Elf_Shdr **text_list;
-	int i, size;
+	u32 size = mod->core_layout.size;
+	u32 *sects, nsects = 0;
 
-	text_list = kvmalloc_array(shnum, sizeof(*text_list), GFP_KERNEL);
-	if (!text_list)
-		return;
+	if (!fgkaslr)
+		return false;
 
-	for (i = 0; i < shnum; i++) {
-		Elf_Shdr *shdr = &info->sechdrs[i];
-		const char *sname = info->secstrings + shdr->sh_name;
+	sects = kvmalloc_array(info->hdr->e_shnum, sizeof(*sects), GFP_KERNEL);
+	if (!sects)
+		return false;
+
+	for (u32 i = 0; i < info->hdr->e_shnum; i++) {
+		const Elf_Shdr *shdr = &info->sechdrs[i];
+		const char *sname;
+
+		sname = info->secstrings + shdr->sh_name;
 
 		if (!(shdr->sh_flags & SHF_ALLOC) ||
 		    !(shdr->sh_flags & SHF_EXECINSTR) ||
@@ -1747,43 +1754,40 @@ static void randomize_text(struct module *mod, struct load_info *info)
 		    module_init_layout_section(sname))
 			continue;
 
-		/*
-		 * With CONFIG_CFI_CLANG, .text with __cfi_check() must come
-		 * before any other text sections, and be aligned to PAGE_SIZE.
-		 * Don't include it in the shuffle list.
-		 */
-		if (IS_ENABLED(CONFIG_CFI_CLANG) && !strcmp(sname, ".text"))
-			continue;
+		sects[nsects++] = i;
 
-		if (!num_text_sections)
-			size = shdr->sh_entsize;
-
-		text_list[num_text_sections] = shdr;
-		num_text_sections++;
+		/* Print in the original order to not reveal the real layout */
+		pr_debug("\t%s\n", sname);
 	}
 
-	if (!num_text_sections)
+	if (unlikely(!nsects))
 		goto exit;
 
-	shuffle_array(text_list, num_text_sections);
+	shuffle_array(sects, nsects);
 
-	for (i = 0; i < num_text_sections; i++) {
-		Elf_Shdr *shdr = text_list[i];
+	for (u32 i = 0; i < nsects; i++) {
+		u32 sidx = sects[i];
+		Elf_Shdr *shdr;
 
-		/*
-		 * get_offset has a section index for it's last
-		 * argument, that is only used by arch_mod_section_prepend(),
-		 * which is only defined by parisc. Since this type
-		 * of randomization isn't supported on parisc, we can
-		 * safely pass in zero as the last argument, as it is
-		 * ignored.
-		 */
-		shdr->sh_entsize = module_get_offset(mod, &size, shdr, 0);
+		shdr = &info->sechdrs[sidx];
+		shdr->sh_entsize = module_get_offset(mod, &size, shdr, sidx);
 	}
 
 exit:
-	kvfree(text_list);
+	mod->core_layout.size = strict_align(size);
+	mod->core_layout.text_size = mod->core_layout.size;
+
+	kvfree(sects);
+
+	return true;
 }
+#else /* !CONFIG_MODULE_FG_KASLR */
+static inline bool module_randomize_text(struct module *mod,
+					 const struct load_info *info)
+{
+	return false;
+}
+#endif /* !CONFIG_MODULE_FG_KASLR */
 
 /*
  * Lay out the SHF_ALLOC sections in a way not dissimilar to how ld
@@ -3059,6 +3063,7 @@ static void do_free_init(struct work_struct *w)
 	}
 }
 
+<<<<<<< HEAD
 void flush_module_init_free_work(void)
 {
 	flush_work(&init_free_wq);
@@ -3066,6 +3071,8 @@ void flush_module_init_free_work(void)
 
 #undef MODULE_PARAM_PREFIX
 #define MODULE_PARAM_PREFIX "module."
+=======
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 /* Default value for module->async_probe_requested */
 static bool async_probe;
 module_param(async_probe, bool, 0644);

@@ -59,8 +59,15 @@ SYM_DATA_END(kexec_debug_idt)
 
 	.section .text..relocate_kernel,"ax";
 	.code64
+<<<<<<< HEAD
 SYM_CODE_START_NOALIGN(relocate_kernel)
 	UNWIND_HINT_END_OF_STACK
+=======
+SYM_OUTER_LABEL(relocate_range)
+SYM_POP_SECTION()
+SYM_CODE_START_NOALIGN_SECT(relocate_kernel, kexec_control_code)
+	UNWIND_HINT_EMPTY
+>>>>>>> 62e9ca566070 ([RAW] New implementation)
 	ANNOTATE_NOENDBR
 	/*
 	 * %rdi indirection_page
@@ -398,6 +405,7 @@ SYM_CODE_START_LOCAL_NOALIGN(swap_pages)
 	int3
 SYM_CODE_END(swap_pages)
 
+<<<<<<< HEAD
 /*
  * Generic 'print character' routine
  *  - %al: Character to be printed (may clobber %rax)
@@ -616,3 +624,9 @@ SYM_CODE_START_LOCAL_NOALIGN(exc_handler)
 	jmp	.Ldie
 
 SYM_CODE_END(exc_handler)
+=======
+SYM_PUSH_SECTION(kexec_control_code)
+	.skip KEXEC_CONTROL_CODE_MAX_SIZE - (. - relocate_kernel), 0xcc
+SYM_LABEL_END(relocate_range)
+SYM_POP_SECTION()
+>>>>>>> 62e9ca566070 ([RAW] New implementation)

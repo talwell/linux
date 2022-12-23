@@ -3985,6 +3985,13 @@
 			trigger a WARN_ON() instead of a pr_warn(). Note that
 			if MODULE_DEBUG_AUTOLOAD_DUPS_TRACE is set, WARN_ON()s
 			will always be issued and this option does nothing.
+
+	module.fgkaslr=<bool>
+			[KNL] When CONFIG_MODULE_FG_KASLR is set, this enables
+			or disables randomizing function order on module load.
+			It is enabled by default, so `true` does nothing here.
+			Also see: Documentation/security/fgkaslr.rst.
+
 	module.sig_enforce
 			[KNL] When CONFIG_MODULE_SIG is set, this means that
 			modules without (valid) signatures will fail to load.
